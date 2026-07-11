@@ -19,3 +19,15 @@ Learn AI Agent development from scratch.
 
 - Python
 - Groq API
+
+## Project Structure
+
+app/
+    agents/
+    clients/
+    prompts/
+    services/
+
+tests/
+
+docs/
