@@ -7,3 +7,5 @@ agent = ChatAgent(
 )
 
 print(agent.chat("Hello"))
+
+print(agent.chat("What is Python?"))
