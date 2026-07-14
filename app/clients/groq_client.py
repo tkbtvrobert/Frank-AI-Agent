@@ -22,18 +22,19 @@ from groq import Groq
 from app.config import GROQ_API_KEY
 from app.config import GROQ_MODEL
 from groq import (APITimeoutError, AuthenticationError, APIConnectionError)
+from app.clients.base_client import BaseClient
 
-class GroqClient:
-    def __init__(self):
+class GroqClient(BaseClient):
+    def __init__(self) -> None:
         self.client = Groq(
             api_key=GROQ_API_KEY
         )
 
-    def chat(self, messages):
+    def chat(self, messages: list[dict]) -> str:
         try:
             response = self.client.chat.completions.create(messages=messages, model=GROQ_MODEL)
-        except AuthenticationError as e:
+        except AuthenticationError:
             raise
-        except APITimeoutError as e:
+        except APITimeoutError:
             raise
         return response.choices[0].message.content

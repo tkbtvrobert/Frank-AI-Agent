@@ -1,5 +1,6 @@
 from app.agent.chat_agent import ChatAgent
 from app.clients.groq_client import GroqClient
+from app.clients.openai_client import OpenAIClient
 
 agent = ChatAgent(
     prompt_name="system_prompt.txt",
