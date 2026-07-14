@@ -1,6 +1,7 @@
 from pathlib import Path
 from app.clients.base_client import BaseClient
 from typing import Any
+from app.models.message_role import MessageRole
 
 class ChatAgent:
     def __init__(self, prompt_name: str, client: BaseClient) -> None:
@@ -17,12 +18,12 @@ class ChatAgent:
     def _build_messages(self, message:str) -> list[dict[str, Any]]:
         messages = [
             {
-                "role": "system",
+                "role": MessageRole.SYSTEM.value,
                 "content": self.system_prompt
             },
             *self.history,
             {
-                "role": "user",
+                "role": MessageRole.USER.value,
                 "content": message
             }
         ]
@@ -37,7 +38,7 @@ class ChatAgent:
     
     def chat(self, message: str) -> str:
         messages = self._build_messages(message)
-        self._add_history("user", message)
+        self._add_history(MessageRole.USER.value, message)
         response = self.client.chat(messages)
-        self._add_history("assistant", response)
+        self._add_history(MessageRole.ASSISTANT.value, response)
         return response
