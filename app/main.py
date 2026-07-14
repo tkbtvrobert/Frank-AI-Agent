@@ -11,4 +11,3 @@ agent = ChatAgent(
 
 print(agent.chat("My name is Frank."))
 print(agent.chat("What is my name?"))
-print(agent.history)
