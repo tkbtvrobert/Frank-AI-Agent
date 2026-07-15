@@ -5,7 +5,9 @@ from app.models.message_role import MessageRole
 
 
 class ChatAgent:
-    def __init__(self, prompt_name: str, client: BaseClient) -> None:
+    def __init__(
+        self, prompt_name: str, client: BaseClient, max_history_rounds: int = 2
+    ) -> None:
         self.app_dir = Path(__file__).resolve().parent.parent
         self.system_prompt = self._load_prompt(prompt_name)
         self.system_message = Message(
@@ -14,6 +16,7 @@ class ChatAgent:
         )
         self.client = client
         self.history: list[Message] = []
+        self.max_history_messages = max_history_rounds
 
     def _load_prompt(self, prompt_name: str) -> str:
         prompts_dir = self.app_dir / "prompts"
@@ -41,9 +44,15 @@ class ChatAgent:
         )
         self.history.append(history_message)
 
+    def _trim_history(self) -> None:
+        max_messages = self.max_history_messages * 2
+        if len(self.history) > max_messages:
+            self.history = self.history[-max_messages:]
+
     def chat(self, message: str) -> str:
         messages = self._build_messages(message)
         self._add_history(MessageRole.USER, message)
         response = self.client.chat(messages)
         self._add_history(MessageRole.ASSISTANT, response)
+        self._trim_history()
         return response
