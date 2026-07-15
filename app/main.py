@@ -1,12 +1,16 @@
 from app.agent.chat_agent import ChatAgent
 from app.clients.groq_client import GroqClient
-from app.clients.openai_client import OpenAIClient
-from tests.fakes.fake_client import FakeClient
+from app.config_models.chat_agent_config import ChatAgentConfig
 
 client = GroqClient()
 
-agent = ChatAgent(
+config = ChatAgentConfig(
     prompt_name="system_prompt.txt",
+    max_history_rounds=2,
+)
+
+agent = ChatAgent(
+    config=config,
     client=client,
 )
 
