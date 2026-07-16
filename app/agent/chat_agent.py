@@ -2,21 +2,24 @@ from pathlib import Path
 from app.clients.base_client import BaseClient
 from app.models.message import Message
 from app.models.message_role import MessageRole
-
+from app.memory.base_memory import BaseMemory
+from app.config_models.chat_agent_config import ChatAgentConfig
 
 class ChatAgent:
     def __init__(
-        self, prompt_name: str, client: BaseClient, max_history_rounds: int = 2
+        self,
+        config: ChatAgentConfig,
+        client: BaseClient,
+        memory: BaseMemory,
     ) -> None:
         self.app_dir = Path(__file__).resolve().parent.parent
-        self.system_prompt = self._load_prompt(prompt_name)
+        self.system_prompt = self._load_prompt(config.prompt_name)
         self.system_message = Message(
             role=MessageRole.SYSTEM,
             content=self.system_prompt,
         )
         self.client = client
-        self.history: list[Message] = []
-        self.max_history_messages = max_history_rounds
+        self.memory = memory
 
     def _load_prompt(self, prompt_name: str) -> str:
         prompts_dir = self.app_dir / "prompts"
@@ -25,7 +28,7 @@ class ChatAgent:
 
     def _build_messages(self, message: str) -> list[dict[str, str]]:
         history_messages = [
-            history_message.to_dict() for history_message in self.history
+            history_message.to_dict() for history_message in self.memory.get_messages()
         ]
         messages = [
             self.system_message.to_dict(),
@@ -37,22 +40,19 @@ class ChatAgent:
         ]
         return messages
 
-    def _add_history(self, role: MessageRole, content: str) -> None:
-        history_message = Message(
-            role=role,
-            content=content,
-        )
-        self.history.append(history_message)
-
-    def _trim_history(self) -> None:
-        max_messages = self.max_history_messages * 2
-        if len(self.history) > max_messages:
-            self.history = self.history[-max_messages:]
-
     def chat(self, message: str) -> str:
         messages = self._build_messages(message)
-        self._add_history(MessageRole.USER, message)
         response = self.client.chat(messages)
-        self._add_history(MessageRole.ASSISTANT, response)
-        self._trim_history()
+        uesr_message = Message(
+            role=MessageRole.USER,
+            content=message,
+        )
+        assistant_message = Message(
+            role=MessageRole.ASSISTANT,
+            content=response,
+        )
+        self.memory.add_turn(
+            user_message=uesr_message,
+            assistant_message=assistant_message,
+        )
         return response
