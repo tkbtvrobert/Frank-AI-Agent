@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call, patch
 import httpx
 from groq import APIConnectionError
 from app.clients.groq_client import GroqClient
@@ -9,10 +9,12 @@ from groq import AuthenticationError
 from app.exceptions.client_exceptions import ClientAuthenticationError
 
 
-def test_chat_retries_connection_error_then_succeeds() -> None:
+@patch("app.clients.groq_client.time.sleep")
+def test_chat_retries_connection_error_then_succeeds(mock_sleep: MagicMock) -> None:
     retry_config = RetryConfig(
         max_attempts=3,
-        initial_delay_seconds=0,
+        initial_delay_seconds=1.0,
+        backoff_multiplier=2.0,
     )
 
     client = GroqClient(
@@ -52,6 +54,15 @@ def test_chat_retries_connection_error_then_succeeds() -> None:
 
     assert result == "Hello, Frank!"
     assert mock_create.call_count == 3
+
+    assert mock_sleep.call_count == 2
+    mock_sleep.assert_any_call(1.0)
+    mock_sleep.assert_any_call(2.0)
+
+    assert mock_sleep.call_args_list == [
+        call(1.0),
+        call(2.0),
+    ]
 
 
 def test_chat_raises_connection_error_after_max_attempts() -> None:
@@ -139,3 +150,19 @@ def test_chat_does_not_retry_authentication_error() -> None:
         )
 
     assert mock_create.call_count == 1
+
+
+def test_calculate_delay_uses_exponential_backoff() -> None:
+    retry_config = RetryConfig(
+        max_attempts=4,
+        initial_delay_seconds=1.0,
+        backoff_multiplier=2.0,
+    )
+
+    client = GroqClient(
+        retry_config=retry_config,
+    )
+
+    assert client._calculate_delay(1) == 1.0
+    assert client._calculate_delay(2) == 2.0
+    assert client._calculate_delay(3) == 4.0

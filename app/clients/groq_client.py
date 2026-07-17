@@ -40,11 +40,22 @@ class GroqClient(BaseClient):
         self.client = Groq(api_key=GROQ_API_KEY)
         self.retry_config = retry_config
 
-    def chat(self, messages: list[dict]) -> str:
+    def _calculate_delay(self, attempt: int) -> float:
+        return (
+            self.retry_config.initial_delay_seconds
+            * self.retry_config.backoff_multiplier ** (attempt - 1)
+        )
+
+    def chat(self, messages: list[dict[str, str]]) -> str:
         max_attempts = self.retry_config.max_attempts
-        delay_seconds = self.retry_config.initial_delay_seconds
         for attempt in range(1, max_attempts + 1):
             try:
+                logger.debug(
+                    "Sending Groq request attempt=%d/%d",
+                    attempt,
+                    max_attempts,
+                )
+
                 response = self.client.chat.completions.create(
                     messages=messages, model=GROQ_MODEL
                 )
@@ -58,12 +69,6 @@ class GroqClient(BaseClient):
                 ) from error
 
             except APITimeoutError as error:
-                logger.warning(
-                    "Groq request timed out on attempt %d/%d",
-                    attempt,
-                    max_attempts,
-                )
-
                 if attempt == max_attempts:
                     logger.exception(
                         "Groq request failed after %d attempts",
@@ -71,15 +76,19 @@ class GroqClient(BaseClient):
                     )
 
                     raise ClientTimeoutError("AI client request timed out") from error
+
+                delay_seconds = self._calculate_delay(attempt)
+
+                logger.warning(
+                    "Groq request timed out on attempt %d/%d. Retrying in %.1f seconds",
+                    attempt,
+                    max_attempts,
+                    delay_seconds,
+                )
+
                 time.sleep(delay_seconds)
 
             except APIConnectionError as error:
-                logger.warning(
-                    "Groq connection failed on attempt %d/%d",
-                    attempt,
-                    max_attempts,
-                )
-
                 if attempt == max_attempts:
                     logger.exception(
                         "Groq connection failed after %d attempts",
@@ -89,6 +98,16 @@ class GroqClient(BaseClient):
                     raise ClientConnectionError(
                         "Failed to connect to AI service"
                     ) from error
+
+                delay_seconds = self._calculate_delay(attempt)
+
+                logger.warning(
+                    "Groq connection failed on attempt %d/%d. Retrying in %.1f seconds",
+                    attempt,
+                    max_attempts,
+                    delay_seconds,
+                )
+
                 time.sleep(delay_seconds)
 
         raise RuntimeError("Retry loop ended unexpectedly")
