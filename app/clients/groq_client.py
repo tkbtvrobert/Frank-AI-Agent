@@ -21,28 +21,74 @@ Not responsible for:
 from groq import Groq
 from app.config import GROQ_API_KEY
 from app.config import GROQ_MODEL
-from groq import (APITimeoutError, AuthenticationError, APIConnectionError)
+from groq import APITimeoutError, AuthenticationError, APIConnectionError
 from app.clients.base_client import BaseClient
 import logging
+from app.exceptions.client_exceptions import (
+    ClientAuthenticationError,
+    ClientConnectionError,
+    ClientTimeoutError,
+)
+from app.config_models.retry_config import RetryConfig
+import time
 
 logger = logging.getLogger(__name__)
 
+
 class GroqClient(BaseClient):
-    def __init__(self) -> None:
-        self.client = Groq(
-            api_key=GROQ_API_KEY
-        )
+    def __init__(self, retry_config: RetryConfig) -> None:
+        self.client = Groq(api_key=GROQ_API_KEY)
+        self.retry_config = retry_config
 
     def chat(self, messages: list[dict]) -> str:
-        try:
-            response = self.client.chat.completions.create(messages=messages, model=GROQ_MODEL)
-        except AuthenticationError:
-            logger.exception("Groq authentication failed")
-            raise
-        except APITimeoutError:
-            logger.exception("Groq request timed out")
-            raise
-        except APIConnectionError:
-            logger.exception("Failed to connect to Groq API")
-            raise
-        return response.choices[0].message.content
+        max_attempts = self.retry_config.max_attempts
+        delay_seconds = self.retry_config.initial_delay_seconds
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    messages=messages, model=GROQ_MODEL
+                )
+
+                return response.choices[0].message.content
+            except AuthenticationError as error:
+                logger.exception("Groq authentication failed")
+
+                raise ClientAuthenticationError(
+                    "AI client authentication failed"
+                ) from error
+
+            except APITimeoutError as error:
+                logger.warning(
+                    "Groq request timed out on attempt %d/%d",
+                    attempt,
+                    max_attempts,
+                )
+
+                if attempt == max_attempts:
+                    logger.exception(
+                        "Groq request failed after %d attempts",
+                        max_attempts,
+                    )
+
+                    raise ClientTimeoutError("AI client request timed out") from error
+                time.sleep(delay_seconds)
+
+            except APIConnectionError as error:
+                logger.warning(
+                    "Groq connection failed on attempt %d/%d",
+                    attempt,
+                    max_attempts,
+                )
+
+                if attempt == max_attempts:
+                    logger.exception(
+                        "Groq connection failed after %d attempts",
+                        max_attempts,
+                    )
+
+                    raise ClientConnectionError(
+                        "Failed to connect to AI service"
+                    ) from error
+                time.sleep(delay_seconds)
+
+        raise RuntimeError("Retry loop ended unexpectedly")

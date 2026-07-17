@@ -8,6 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class ChatAgent:
     def __init__(
         self,

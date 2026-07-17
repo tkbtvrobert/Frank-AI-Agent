@@ -4,37 +4,80 @@ from app.config_models.chat_agent_config import ChatAgentConfig
 from app.memory.sliding_window_memory import SlidingWindowMemory
 from app.config_models.memory_config import MemoryConfig
 from app.core.logging_config import configure_logging
-
-configure_logging()
-
-client = GroqClient()
-
-config = ChatAgentConfig(
-    prompt_name="system_prompt.txt",
+from app.exceptions.client_exceptions import (
+    AIClientError,
+    ClientAuthenticationError,
+    ClientConnectionError,
+    ClientTimeoutError,
 )
+from app.config_models.retry_config import RetryConfig
 
-memory_config=MemoryConfig(
-    max_history_rounds=2,
-)
 
-memory = SlidingWindowMemory(
-    max_rounds=memory_config.max_history_rounds,
-)
+def run_demo(agent: ChatAgent) -> None:
+    messages = [
+        "My name is Frank.",
+        "What is my name?",
+        "How are you?",
+        "What are you doing?",
+    ]
 
-agent = ChatAgent(
-    config=config,
-    client=client,
-    memory=memory,
-)
+    for message in messages:
+        response = agent.chat(message)
+        print(response)
 
-print(agent.chat("My name is Frank."))
-print(agent.chat("What is my name?"))
-print(agent.chat("How are you?"))
-print(agent.chat("What are you doing?"))
+    print(agent.memory.get_messages())
+    print(len(agent.memory.get_messages()))
 
-print(memory.get_messages())
-print(len(memory.get_messages()))
+    agent.memory.clear()
+    print(agent.memory.get_messages())
 
-memory.clear()
 
-print(memory.get_messages())
+def create_agent() -> ChatAgent:
+    retry_config = RetryConfig(
+        max_attempts=3,
+        initial_delay_seconds=1,
+    )
+    client = GroqClient(
+        retry_config=retry_config,
+    )
+
+    config = ChatAgentConfig(
+        prompt_name="system_prompt.txt",
+    )
+
+    memory_config = MemoryConfig(
+        max_history_rounds=2,
+    )
+
+    memory = SlidingWindowMemory(
+        max_rounds=memory_config.max_history_rounds,
+    )
+
+    return ChatAgent(
+        config=config,
+        client=client,
+        memory=memory,
+    )
+
+
+def main() -> None:
+    configure_logging()
+
+    try:
+        agent = create_agent()
+        run_demo(agent)
+    except ClientAuthenticationError:
+        print("Authentication failed. Please check the API configuration.")
+
+    except ClientTimeoutError:
+        print("The AI service took too long to respond.")
+
+    except ClientConnectionError:
+        print("Unable to connect to the AI service.")
+
+    except AIClientError as error:
+        print(f"AI service error: {error}")
+
+
+if __name__ == "__main__":
+    main()
