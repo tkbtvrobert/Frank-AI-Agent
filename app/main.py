@@ -3,6 +3,9 @@ from app.clients.groq_client import GroqClient
 from app.config_models.chat_agent_config import ChatAgentConfig
 from app.memory.sliding_window_memory import SlidingWindowMemory
 from app.config_models.memory_config import MemoryConfig
+from app.core.logging_config import configure_logging
+
+configure_logging()
 
 client = GroqClient()
 

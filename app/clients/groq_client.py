@@ -23,6 +23,9 @@ from app.config import GROQ_API_KEY
 from app.config import GROQ_MODEL
 from groq import (APITimeoutError, AuthenticationError, APIConnectionError)
 from app.clients.base_client import BaseClient
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GroqClient(BaseClient):
     def __init__(self) -> None:
@@ -34,7 +37,12 @@ class GroqClient(BaseClient):
         try:
             response = self.client.chat.completions.create(messages=messages, model=GROQ_MODEL)
         except AuthenticationError:
+            logger.exception("Groq authentication failed")
             raise
         except APITimeoutError:
+            logger.exception("Groq request timed out")
+            raise
+        except APIConnectionError:
+            logger.exception("Failed to connect to Groq API")
             raise
         return response.choices[0].message.content

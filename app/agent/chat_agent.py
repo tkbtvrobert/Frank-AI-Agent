@@ -4,6 +4,9 @@ from app.models.message import Message
 from app.models.message_role import MessageRole
 from app.memory.base_memory import BaseMemory
 from app.config_models.chat_agent_config import ChatAgentConfig
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ChatAgent:
     def __init__(
@@ -12,6 +15,7 @@ class ChatAgent:
         client: BaseClient,
         memory: BaseMemory,
     ) -> None:
+        logger.info("ChatAgent initialized")
         self.app_dir = Path(__file__).resolve().parent.parent
         self.system_prompt = self._load_prompt(config.prompt_name)
         self.system_message = Message(
@@ -27,6 +31,10 @@ class ChatAgent:
         return file_path.read_text(encoding="utf-8")
 
     def _build_messages(self, message: str) -> list[dict[str, str]]:
+        logger.debug(
+            "Building messages with %d memory items",
+            len(self.memory.get_messages()),
+        )
         history_messages = [
             history_message.to_dict() for history_message in self.memory.get_messages()
         ]
@@ -41,6 +49,10 @@ class ChatAgent:
         return messages
 
     def chat(self, message: str) -> str:
+        logger.info(
+            "Processing chat request with message_length=%d",
+            len(message),
+        )
         messages = self._build_messages(message)
         response = self.client.chat(messages)
         uesr_message = Message(
@@ -55,4 +67,5 @@ class ChatAgent:
             user_message=uesr_message,
             assistant_message=assistant_message,
         )
+        logger.info("Chat request completed")
         return response

@@ -1,6 +1,8 @@
 from app.memory.base_memory import BaseMemory
 from app.models.message import Message
+import logging
 
+logger = logging.getLogger(__name__)
 
 class SlidingWindowMemory(BaseMemory):
     def __init__(self, max_rounds: int = 2) -> None:
@@ -19,9 +21,15 @@ class SlidingWindowMemory(BaseMemory):
 
         if len(self.messages) > max_messages:
             self.messages = self.messages[-max_messages:]
+        
+            logger.debug(
+                "Trimmed memory to %d messages",
+                max_messages,
+            )
 
     def get_messages(self) -> list[Message]:
         return self.messages
     
     def clear(self) -> None:
+        logger.info("Memory cleared")
         return self.messages.clear()
