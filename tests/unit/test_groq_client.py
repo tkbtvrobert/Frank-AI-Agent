@@ -9,6 +9,7 @@ from groq import (
 )
 
 from app.clients.groq_client import GroqClient
+from app.config_models.groq_config import GroqConfig
 from app.config_models.retry_config import RetryConfig
 from app.exceptions.client_exceptions import (
     ClientAuthenticationError,
@@ -17,17 +18,33 @@ from app.exceptions.client_exceptions import (
 )
 
 
-@patch("app.clients.groq_client.time.sleep")
-def test_chat_retries_connection_error_then_succeeds(mock_sleep: MagicMock) -> None:
+def create_groq_client(
+    *,
+    max_attempts: int = 3,
+    initial_delay_seconds: float = 1.0,
+    backoff_multiplier: float = 2.0,
+    model: str = "test-model",
+) -> GroqClient:
+    groq_config = GroqConfig(
+        api_key="test-api-key",
+        model="test-model",
+    )
+
     retry_config = RetryConfig(
         max_attempts=3,
         initial_delay_seconds=1.0,
         backoff_multiplier=2.0,
     )
 
-    client = GroqClient(
+    return GroqClient(
+        groq_config=groq_config,
         retry_config=retry_config,
     )
+
+
+@patch("app.clients.groq_client.time.sleep")
+def test_chat_retries_connection_error_then_succeeds(mock_sleep: MagicMock) -> None:
+    client = create_groq_client()
 
     request = httpx.Request(
         method="POST",
@@ -74,14 +91,7 @@ def test_chat_retries_connection_error_then_succeeds(mock_sleep: MagicMock) -> N
 
 
 def test_chat_raises_connection_error_after_max_attempts() -> None:
-    retry_config = RetryConfig(
-        max_attempts=3,
-        initial_delay_seconds=0,
-    )
-
-    client = GroqClient(
-        retry_config=retry_config,
-    )
+    client = create_groq_client()
 
     request = httpx.Request(
         method="POST",
@@ -112,14 +122,7 @@ def test_chat_raises_connection_error_after_max_attempts() -> None:
 
 
 def test_chat_does_not_retry_authentication_error() -> None:
-    retry_config = RetryConfig(
-        max_attempts=3,
-        initial_delay_seconds=0,
-    )
-
-    client = GroqClient(
-        retry_config=retry_config,
-    )
+    client = create_groq_client()
 
     request = httpx.Request(
         method="POST",
@@ -161,15 +164,7 @@ def test_chat_does_not_retry_authentication_error() -> None:
 
 
 def test_calculate_delay_uses_exponential_backoff() -> None:
-    retry_config = RetryConfig(
-        max_attempts=4,
-        initial_delay_seconds=1.0,
-        backoff_multiplier=2.0,
-    )
-
-    client = GroqClient(
-        retry_config=retry_config,
-    )
+    client = create_groq_client()
 
     assert client._calculate_delay(1) == 1.0
     assert client._calculate_delay(2) == 2.0
@@ -180,15 +175,7 @@ def test_calculate_delay_uses_exponential_backoff() -> None:
 def test_chat_retries_rate_limit_error_then_succeeds(
     mock_sleep: MagicMock,
 ) -> None:
-    retry_config = RetryConfig(
-        max_attempts=3,
-        initial_delay_seconds=1.0,
-        backoff_multiplier=2.0,
-    )
-
-    client = GroqClient(
-        retry_config=retry_config,
-    )
+    client = create_groq_client()
 
     request = httpx.Request(
         method="POST",
@@ -241,15 +228,7 @@ def test_chat_retries_rate_limit_error_then_succeeds(
 def test_chat_raises_rate_limit_error_after_max_attempts(
     mock_sleep: MagicMock,
 ) -> None:
-    retry_config = RetryConfig(
-        max_attempts=3,
-        initial_delay_seconds=1.0,
-        backoff_multiplier=2.0,
-    )
-
-    client = GroqClient(
-        retry_config=retry_config,
-    )
+    client = create_groq_client()
 
     request = httpx.Request(
         method="POST",

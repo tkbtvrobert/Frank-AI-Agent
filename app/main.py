@@ -10,6 +10,8 @@ from app.exceptions.client_exceptions import (
     ClientConnectionError,
     ClientTimeoutError,
 )
+from app.config import GROQ_API_KEY, GROQ_MODEL
+from app.config_models.groq_config import GroqConfig
 from app.config_models.retry_config import RetryConfig
 
 
@@ -33,11 +35,17 @@ def run_demo(agent: ChatAgent) -> None:
 
 
 def create_agent() -> ChatAgent:
+    groq_config = GroqConfig(
+        api_key=GROQ_API_KEY,
+        model=GROQ_MODEL,
+    )
     retry_config = RetryConfig(
         max_attempts=3,
         initial_delay_seconds=1,
+        backoff_multiplier=2.0,
     )
     client = GroqClient(
+        groq_config=groq_config,
         retry_config=retry_config,
     )
 

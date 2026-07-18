@@ -30,7 +30,7 @@ from groq import (
 )
 
 from app.clients.base_client import BaseClient
-from app.config import GROQ_API_KEY, GROQ_MODEL
+from app.config_models.groq_config import GroqConfig
 from app.config_models.retry_config import RetryConfig
 from app.exceptions.client_exceptions import (
     ClientAuthenticationError,
@@ -43,8 +43,9 @@ logger = logging.getLogger(__name__)
 
 
 class GroqClient(BaseClient):
-    def __init__(self, retry_config: RetryConfig) -> None:
-        self.client = Groq(api_key=GROQ_API_KEY)
+    def __init__(self, groq_config: GroqConfig, retry_config: RetryConfig) -> None:
+        self.client = Groq(api_key=groq_config.api_key)
+        self.groq_config = groq_config
         self.retry_config = retry_config
 
     def _calculate_delay(self, attempt: int) -> float:
@@ -95,7 +96,7 @@ class GroqClient(BaseClient):
                 )
 
                 response = self.client.chat.completions.create(
-                    messages=messages, model=GROQ_MODEL
+                    messages=messages, model=self.groq_config.model,
                 )
 
                 logger.info(
