@@ -18,19 +18,26 @@ Not responsible for:
 - Managing Workflows
 """
 
-from groq import Groq
-from app.config import GROQ_API_KEY
-from app.config import GROQ_MODEL
-from groq import APITimeoutError, AuthenticationError, APIConnectionError
-from app.clients.base_client import BaseClient
 import logging
+import time
+
+from groq import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    Groq,
+    RateLimitError,
+)
+
+from app.clients.base_client import BaseClient
+from app.config import GROQ_API_KEY, GROQ_MODEL
+from app.config_models.retry_config import RetryConfig
 from app.exceptions.client_exceptions import (
     ClientAuthenticationError,
     ClientConnectionError,
+    ClientRateLimitError,
     ClientTimeoutError,
 )
-from app.config_models.retry_config import RetryConfig
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +52,36 @@ class GroqClient(BaseClient):
             self.retry_config.initial_delay_seconds
             * self.retry_config.backoff_multiplier ** (attempt - 1)
         )
+
+    def _handle_retryable_error(
+        self,
+        *,
+        attempt: int,
+        max_attempts: int,
+        error: Exception,
+        error_name: str,
+        final_exception: Exception,
+    ) -> None:
+        if attempt == max_attempts:
+            logger.exception(
+                "Groq %s failed after %d attempts",
+                error_name,
+                max_attempts,
+            )
+
+            raise final_exception from error
+
+        delay_seconds = self._calculate_delay(attempt)
+
+        logger.warning(
+            "Groq %s failed on attempt %d/%d. Retrying in %.1f seconds",
+            error_name,
+            attempt,
+            max_attempts,
+            delay_seconds,
+        )
+
+        time.sleep(delay_seconds)
 
     def chat(self, messages: list[dict[str, str]]) -> str:
         max_attempts = self.retry_config.max_attempts
@@ -68,46 +105,35 @@ class GroqClient(BaseClient):
                     "AI client authentication failed"
                 ) from error
 
-            except APITimeoutError as error:
-                if attempt == max_attempts:
-                    logger.exception(
-                        "Groq request failed after %d attempts",
-                        max_attempts,
-                    )
-
-                    raise ClientTimeoutError("AI client request timed out") from error
-
-                delay_seconds = self._calculate_delay(attempt)
-
-                logger.warning(
-                    "Groq request timed out on attempt %d/%d. Retrying in %.1f seconds",
-                    attempt,
-                    max_attempts,
-                    delay_seconds,
+            except RateLimitError as error:
+                self._handle_retryable_error(
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    error=error,
+                    error_name="rate limit",
+                    final_exception=ClientRateLimitError(
+                        "AI service rate limit exceeded"
+                    ),
                 )
 
-                time.sleep(delay_seconds)
+            except APITimeoutError as error:
+                self._handle_retryable_error(
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    error=error,
+                    error_name="request timeout",
+                    final_exception=ClientTimeoutError("AI client request timed out"),
+                )
 
             except APIConnectionError as error:
-                if attempt == max_attempts:
-                    logger.exception(
-                        "Groq connection failed after %d attempts",
-                        max_attempts,
-                    )
-
-                    raise ClientConnectionError(
+                self._handle_retryable_error(
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    error=error,
+                    error_name="connection",
+                    final_exception=ClientConnectionError(
                         "Failed to connect to AI service"
-                    ) from error
-
-                delay_seconds = self._calculate_delay(attempt)
-
-                logger.warning(
-                    "Groq connection failed on attempt %d/%d. Retrying in %.1f seconds",
-                    attempt,
-                    max_attempts,
-                    delay_seconds,
+                    ),
                 )
-
-                time.sleep(delay_seconds)
 
         raise RuntimeError("Retry loop ended unexpectedly")

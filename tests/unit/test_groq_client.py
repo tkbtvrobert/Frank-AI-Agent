@@ -7,6 +7,8 @@ import pytest
 from app.exceptions.client_exceptions import ClientConnectionError
 from groq import AuthenticationError
 from app.exceptions.client_exceptions import ClientAuthenticationError
+from groq import RateLimitError
+from app.exceptions.client_exceptions import ClientRateLimitError
 
 
 @patch("app.clients.groq_client.time.sleep")
@@ -166,3 +168,116 @@ def test_calculate_delay_uses_exponential_backoff() -> None:
     assert client._calculate_delay(1) == 1.0
     assert client._calculate_delay(2) == 2.0
     assert client._calculate_delay(3) == 4.0
+
+@patch("app.clients.groq_client.time.sleep")
+def test_chat_retries_rate_limit_error_then_succeeds(
+    mock_sleep: MagicMock,
+) -> None:
+    retry_config = RetryConfig(
+        max_attempts=3,
+        initial_delay_seconds=1.0,
+        backoff_multiplier=2.0,
+    )
+
+    client = GroqClient(
+        retry_config=retry_config,
+    )
+
+    request = httpx.Request(
+        method="POST",
+        url="https://api.groq.com/openai/v1/chat/completions",
+    )
+
+    response = httpx.Response(
+        status_code=429,
+        request=request,
+    )
+
+    rate_limit_error = RateLimitError(
+        message="Rate limit exceeded",
+        response=response,
+        body=None,
+    )
+
+    successful_response = MagicMock()
+    successful_response.choices[0].message.content = "Hello, Frank!"
+
+    mock_create = MagicMock(
+        side_effect=[
+            rate_limit_error,
+            rate_limit_error,
+            successful_response,
+        ]
+    )
+
+    client.client.chat.completions.create = mock_create
+
+    result = client.chat(
+        messages=[
+            {
+                "role": "user",
+                "content": "Hello",
+            }
+        ]
+    )
+
+    assert result == "Hello, Frank!"
+    assert mock_create.call_count == 3
+
+    assert mock_sleep.call_args_list == [
+        call(1.0),
+        call(2.0),
+    ]
+
+@patch("app.clients.groq_client.time.sleep")
+def test_chat_raises_rate_limit_error_after_max_attempts(
+    mock_sleep: MagicMock,
+) -> None:
+    retry_config = RetryConfig(
+        max_attempts=3,
+        initial_delay_seconds=1.0,
+        backoff_multiplier=2.0,
+    )
+
+    client = GroqClient(
+        retry_config=retry_config,
+    )
+
+    request = httpx.Request(
+        method="POST",
+        url="https://api.groq.com/openai/v1/chat/completions",
+    )
+
+    response = httpx.Response(
+        status_code=429,
+        request=request,
+    )
+
+    rate_limit_error = RateLimitError(
+        message="Rate limit exceeded",
+        response=response,
+        body=None,
+    )
+
+    mock_create = MagicMock(
+        side_effect=rate_limit_error,
+    )
+
+    client.client.chat.completions.create = mock_create
+
+    with pytest.raises(ClientRateLimitError):
+        client.chat(
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Hello",
+                }
+            ]
+        )
+
+    assert mock_create.call_count == 3
+
+    assert mock_sleep.call_args_list == [
+        call(1.0),
+        call(2.0),
+    ]

@@ -12,3 +12,7 @@ class ClientConnectionError(AIClientError):
 
 class ClientTimeoutError(AIClientError):
     """Raised when an AI client request times out."""
+
+
+class ClientRateLimitError(Exception):
+    """Raised when the AI service rate limit remains exceeded."""
