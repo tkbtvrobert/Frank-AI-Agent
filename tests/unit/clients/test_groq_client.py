@@ -27,13 +27,13 @@ def create_groq_client(
 ) -> GroqClient:
     groq_config = GroqConfig(
         api_key="test-api-key",
-        model="test-model",
+        model=model,
     )
 
     retry_config = RetryConfig(
-        max_attempts=3,
-        initial_delay_seconds=1.0,
-        backoff_multiplier=2.0,
+        max_attempts=max_attempts,
+        initial_delay_seconds=initial_delay_seconds,
+        backoff_multiplier=backoff_multiplier,
     )
 
     return GroqClient(
@@ -42,10 +42,27 @@ def create_groq_client(
     )
 
 
-@patch("app.clients.groq_client.time.sleep")
-def test_chat_retries_connection_error_then_succeeds(mock_sleep: MagicMock) -> None:
-    client = create_groq_client()
+@pytest.fixture
+def groq_client() -> GroqClient:
+    return create_groq_client()
 
+
+@pytest.fixture
+def messages() -> list[dict[str, str]]:
+    return [
+        {
+            "role": "user",
+            "content": "Hello",
+        }
+    ]
+
+
+@patch("app.clients.groq_client.time.sleep")
+def test_chat_retries_connection_error_then_succeeds(
+    mock_sleep: MagicMock,
+    groq_client: GroqClient,
+    messages: list[dict[str, str]],
+) -> None:
     request = httpx.Request(
         method="POST",
         url="https://api.groq.com/openai/v1/chat/completions",
@@ -66,16 +83,9 @@ def test_chat_retries_connection_error_then_succeeds(mock_sleep: MagicMock) -> N
         ]
     )
 
-    client.client.chat.completions.create = mock_create
+    groq_client.client.chat.completions.create = mock_create
 
-    result = client.chat(
-        messages=[
-            {
-                "role": "user",
-                "content": "Hello",
-            }
-        ]
-    )
+    result = groq_client.chat(messages)
 
     assert result == "Hello, Frank!"
     assert mock_create.call_count == 3
@@ -90,9 +100,10 @@ def test_chat_retries_connection_error_then_succeeds(mock_sleep: MagicMock) -> N
     ]
 
 
-def test_chat_raises_connection_error_after_max_attempts() -> None:
-    client = create_groq_client()
-
+def test_chat_raises_connection_error_after_max_attempts(
+    groq_client: GroqClient,
+    messages: list[dict[str, str]],
+) -> None:
     request = httpx.Request(
         method="POST",
         url="https://api.groq.com/openai/v1/chat/completions",
@@ -106,24 +117,18 @@ def test_chat_raises_connection_error_after_max_attempts() -> None:
         side_effect=connection_error,
     )
 
-    client.client.chat.completions.create = mock_create
+    groq_client.client.chat.completions.create = mock_create
 
     with pytest.raises(ClientConnectionError):
-        client.chat(
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Hello",
-                }
-            ]
-        )
+        groq_client.chat(messages)
 
     assert mock_create.call_count == 3
 
 
-def test_chat_does_not_retry_authentication_error() -> None:
-    client = create_groq_client()
-
+def test_chat_does_not_retry_authentication_error(
+    groq_client: GroqClient,
+    messages: list[dict[str, str]],
+) -> None:
     request = httpx.Request(
         method="POST",
         url="https://api.groq.com/openai/v1/chat/completions",
@@ -148,35 +153,28 @@ def test_chat_does_not_retry_authentication_error() -> None:
         side_effect=authentication_error,
     )
 
-    client.client.chat.completions.create = mock_create
+    groq_client.client.chat.completions.create = mock_create
 
     with pytest.raises(ClientAuthenticationError):
-        client.chat(
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Hello",
-                }
-            ]
-        )
+        groq_client.chat(messages)
 
     assert mock_create.call_count == 1
 
 
-def test_calculate_delay_uses_exponential_backoff() -> None:
-    client = create_groq_client()
-
-    assert client._calculate_delay(1) == 1.0
-    assert client._calculate_delay(2) == 2.0
-    assert client._calculate_delay(3) == 4.0
+def test_calculate_delay_uses_exponential_backoff(
+    groq_client: GroqClient,
+) -> None:
+    assert groq_client._calculate_delay(1) == 1.0
+    assert groq_client._calculate_delay(2) == 2.0
+    assert groq_client._calculate_delay(3) == 4.0
 
 
 @patch("app.clients.groq_client.time.sleep")
 def test_chat_retries_rate_limit_error_then_succeeds(
     mock_sleep: MagicMock,
+    groq_client: GroqClient,
+    messages: list[dict[str, str]],
 ) -> None:
-    client = create_groq_client()
-
     request = httpx.Request(
         method="POST",
         url="https://api.groq.com/openai/v1/chat/completions",
@@ -204,16 +202,9 @@ def test_chat_retries_rate_limit_error_then_succeeds(
         ]
     )
 
-    client.client.chat.completions.create = mock_create
+    groq_client.client.chat.completions.create = mock_create
 
-    result = client.chat(
-        messages=[
-            {
-                "role": "user",
-                "content": "Hello",
-            }
-        ]
-    )
+    result = groq_client.chat(messages)
 
     assert result == "Hello, Frank!"
     assert mock_create.call_count == 3
@@ -227,9 +218,9 @@ def test_chat_retries_rate_limit_error_then_succeeds(
 @patch("app.clients.groq_client.time.sleep")
 def test_chat_raises_rate_limit_error_after_max_attempts(
     mock_sleep: MagicMock,
+    groq_client: GroqClient,
+    messages: list[dict[str, str]],
 ) -> None:
-    client = create_groq_client()
-
     request = httpx.Request(
         method="POST",
         url="https://api.groq.com/openai/v1/chat/completions",
@@ -250,17 +241,10 @@ def test_chat_raises_rate_limit_error_after_max_attempts(
         side_effect=rate_limit_error,
     )
 
-    client.client.chat.completions.create = mock_create
+    groq_client.client.chat.completions.create = mock_create
 
     with pytest.raises(ClientRateLimitError):
-        client.chat(
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Hello",
-                }
-            ]
-        )
+        groq_client.chat(messages)
 
     assert mock_create.call_count == 3
 
