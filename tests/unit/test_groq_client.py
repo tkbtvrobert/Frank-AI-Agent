@@ -1,14 +1,20 @@
 from unittest.mock import MagicMock, call, patch
+
 import httpx
-from groq import APIConnectionError
+import pytest
+from groq import (
+    APIConnectionError,
+    AuthenticationError,
+    RateLimitError,
+)
+
 from app.clients.groq_client import GroqClient
 from app.config_models.retry_config import RetryConfig
-import pytest
-from app.exceptions.client_exceptions import ClientConnectionError
-from groq import AuthenticationError
-from app.exceptions.client_exceptions import ClientAuthenticationError
-from groq import RateLimitError
-from app.exceptions.client_exceptions import ClientRateLimitError
+from app.exceptions.client_exceptions import (
+    ClientAuthenticationError,
+    ClientConnectionError,
+    ClientRateLimitError,
+)
 
 
 @patch("app.clients.groq_client.time.sleep")
@@ -169,6 +175,7 @@ def test_calculate_delay_uses_exponential_backoff() -> None:
     assert client._calculate_delay(2) == 2.0
     assert client._calculate_delay(3) == 4.0
 
+
 @patch("app.clients.groq_client.time.sleep")
 def test_chat_retries_rate_limit_error_then_succeeds(
     mock_sleep: MagicMock,
@@ -228,6 +235,7 @@ def test_chat_retries_rate_limit_error_then_succeeds(
         call(1.0),
         call(2.0),
     ]
+
 
 @patch("app.clients.groq_client.time.sleep")
 def test_chat_raises_rate_limit_error_after_max_attempts(

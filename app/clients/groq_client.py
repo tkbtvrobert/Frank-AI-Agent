@@ -74,11 +74,12 @@ class GroqClient(BaseClient):
         delay_seconds = self._calculate_delay(attempt)
 
         logger.warning(
-            "Groq %s failed on attempt %d/%d. Retrying in %.1f seconds",
+            "Groq %s failed on attempt %d/%d. Retrying in %.1f seconds. Reason: %s",
             error_name,
             attempt,
             max_attempts,
             delay_seconds,
+            error,
         )
 
         time.sleep(delay_seconds)
@@ -95,6 +96,12 @@ class GroqClient(BaseClient):
 
                 response = self.client.chat.completions.create(
                     messages=messages, model=GROQ_MODEL
+                )
+
+                logger.info(
+                    "Groq request succeeded on attempt %d/%d",
+                    attempt,
+                    max_attempts,
                 )
 
                 return response.choices[0].message.content
