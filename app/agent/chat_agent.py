@@ -1,7 +1,6 @@
 import logging
 
 from app.clients.base_client import BaseClient
-from app.config_models.chat_agent_config import ChatAgentConfig
 from app.memory.base_memory import BaseMemory
 from app.models.message import Message
 from app.models.message_role import MessageRole
@@ -14,24 +13,19 @@ logger = logging.getLogger(__name__)
 class ChatAgent:
     def __init__(
         self,
-        config: ChatAgentConfig,
+        prompt_template: PromptTemplate,
         client: BaseClient,
         memory: BaseMemory,
     ) -> None:
         logger.info("ChatAgent initialized")
 
-        prompt_template = PromptTemplate(
-            prompt_name=config.prompt_name,
-        )
-
-        self.system_prompt = prompt_template.render(
-            user_name="Frank",
-            language="Traditional Chinese",
-        )
+        self.prompt_template = prompt_template
+        self.client = client
+        self.memory = memory
 
         self.system_message = Message(
             role=MessageRole.SYSTEM,
-            content=self.system_prompt,
+            content=self.prompt_template.render(),
         )
 
         self.client = client

@@ -1,31 +1,30 @@
 from pathlib import Path
 from typing import Any
 
+from app.config_models.prompt_config import PromptConfig
+
 
 class PromptTemplate:
     def __init__(
         self,
-        prompt_name: str,
+        config: PromptConfig,
     ) -> None:
-        self.prompt_name = prompt_name
+        self.config = config
 
     def _get_prompt_path(self) -> Path:
-        return Path(__file__).parent / self.prompt_name
+        return Path(__file__).parent / self.config.prompt_name
 
     def _load_template(self) -> str:
         prompt_path = self._get_prompt_path()
-
-        print(prompt_path)
-        print(prompt_path.exists())
 
         return prompt_path.read_text(
             encoding="utf-8",
         )
 
-    def render(
-        self,
-        **variables: Any,
-    ) -> str:
+    def render(self) -> str:
         template = self._load_template()
 
-        return template.format(**variables)
+        return template.format(
+            user_name=self.config.user_name,
+            language=self.config.language,
+        )

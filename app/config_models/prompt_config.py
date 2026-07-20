@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-
 @dataclass(frozen=True)
-class ChatAgentConfig:
+class PromptConfig:
     prompt_name: str
-    max_history_rounds: int = 2
+    user_name: str
+    language: str

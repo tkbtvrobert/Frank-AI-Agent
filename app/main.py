@@ -1,6 +1,6 @@
 from app.agent.chat_agent import ChatAgent
 from app.clients.groq_client import GroqClient
-from app.config_models.chat_agent_config import ChatAgentConfig
+from app.config_models.prompt_config import PromptConfig
 from app.memory.sliding_window_memory import SlidingWindowMemory
 from app.config_models.memory_config import MemoryConfig
 from app.core.logging_config import configure_logging
@@ -13,6 +13,7 @@ from app.exceptions.client_exceptions import (
 from app.config import GROQ_API_KEY, GROQ_MODEL
 from app.config_models.groq_config import GroqConfig
 from app.config_models.retry_config import RetryConfig
+from app.prompts.prompt_template import PromptTemplate
 
 
 def run_demo(agent: ChatAgent) -> None:
@@ -49,8 +50,14 @@ def create_agent() -> ChatAgent:
         retry_config=retry_config,
     )
 
-    config = ChatAgentConfig(
+    prompt_config = PromptConfig(
         prompt_name="system_prompt.txt",
+        user_name="Frank",
+        language="Traditional Chinese",
+    )
+
+    prompt_template = PromptTemplate(
+        config=prompt_config,
     )
 
     memory_config = MemoryConfig(
@@ -62,7 +69,7 @@ def create_agent() -> ChatAgent:
     )
 
     return ChatAgent(
-        config=config,
+        prompt_template=prompt_template,
         client=client,
         memory=memory,
     )
