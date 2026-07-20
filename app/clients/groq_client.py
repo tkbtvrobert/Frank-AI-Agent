@@ -38,6 +38,7 @@ from app.exceptions.client_exceptions import (
     ClientRateLimitError,
     ClientTimeoutError,
 )
+from app.models.message import Message
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +86,22 @@ class GroqClient(BaseClient):
 
         time.sleep(delay_seconds)
 
-    def chat(self, messages: list[dict[str, str]]) -> str:
+    def _is_valid_response(self, content: str | None) -> bool:
+        if content is None:
+            return False
+
+        cleaned_content = content.strip()
+
+        if not cleaned_content:
+            return False
+
+        return any(character.isalnum() for character in cleaned_content)
+
+    def chat(self, messages: list[Message]) -> str:
+        formatted_messages = [message.to_dict() for message in messages]
+
         max_attempts = self.retry_config.max_attempts
+
         for attempt in range(1, max_attempts + 1):
             try:
                 logger.debug(
@@ -96,8 +111,30 @@ class GroqClient(BaseClient):
                 )
 
                 response = self.client.chat.completions.create(
-                    messages=messages, model=self.groq_config.model,
+                    messages=formatted_messages,
+                    model=self.groq_config.model,
+                    temperature=0,
                 )
+
+                content = response.choices[0].message.content
+
+                if not self._is_valid_response(content):
+                    logger.warning(
+                        "Groq returned invalid content on attempt %d/%d: %r",
+                        attempt,
+                        max_attempts,
+                        content,
+                    )
+
+                    if attempt == max_attempts:
+                        raise RuntimeError(
+                            "Groq returned invalid content "
+                            f"after {max_attempts} attempts"
+                        )
+
+                    delay_seconds = self._calculate_delay(attempt)
+                    time.sleep(delay_seconds)
+                    continue
 
                 logger.info(
                     "Groq request succeeded on attempt %d/%d",
@@ -105,7 +142,7 @@ class GroqClient(BaseClient):
                     max_attempts,
                 )
 
-                return response.choices[0].message.content
+                return content
             except AuthenticationError as error:
                 logger.exception("Groq authentication failed")
 

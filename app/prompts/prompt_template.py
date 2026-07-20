@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Any
 
 from app.config_models.prompt_config import PromptConfig
+from app.prompts.base_prompt_template import BasePromptTemplate
 
 
-class PromptTemplate:
+class PromptTemplate(BasePromptTemplate):
     def __init__(
         self,
         config: PromptConfig,

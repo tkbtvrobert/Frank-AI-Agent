@@ -4,7 +4,7 @@ from app.clients.base_client import BaseClient
 from app.memory.base_memory import BaseMemory
 from app.models.message import Message
 from app.models.message_role import MessageRole
-from app.prompts.prompt_template import PromptTemplate
+from app.prompts.base_prompt_template import BasePromptTemplate
 
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class ChatAgent:
     def __init__(
         self,
-        prompt_template: PromptTemplate,
+        prompt_template: BasePromptTemplate,
         client: BaseClient,
         memory: BaseMemory,
     ) -> None:
@@ -23,37 +23,35 @@ class ChatAgent:
         self.client = client
         self.memory = memory
 
+        rendered_prompt = self.prompt_template.render()
+
+        if not rendered_prompt.strip():
+            raise ValueError("Rendered system prompt cannot be empty")
+
         self.system_message = Message(
             role=MessageRole.SYSTEM,
-            content=self.prompt_template.render(),
+            content=rendered_prompt,
         )
-
-        self.client = client
-        self.memory = memory
 
     def _build_messages(
         self,
         message: str,
-    ) -> list[dict[str, str]]:
+    ) -> list[Message]:
+        history_messages = self.memory.get_messages()
+
         logger.debug(
             "Building messages with %d memory items",
-            len(self.memory.get_messages()),
+            len(history_messages),
         )
 
-        history_messages = [
-            history_message.to_dict() for history_message in self.memory.get_messages()
-        ]
-
-        messages = [
-            self.system_message.to_dict(),
+        return [
+            self.system_message,
             *history_messages,
             Message(
                 role=MessageRole.USER,
                 content=message,
-            ).to_dict(),
+            ),
         ]
-
-        return messages
 
     def chat(
         self,

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-class BaseClient(ABC):
+from app.models.message import Message
 
+
+class BaseClient(ABC):
     @abstractmethod
-    def chat(self, messages: list[dict]) -> str:
+    def chat(self, messages: list[Message]) -> str:
         pass
