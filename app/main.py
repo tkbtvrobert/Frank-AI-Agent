@@ -1,8 +1,10 @@
 from app.agent.chat_agent import ChatAgent
 from app.clients.groq_client import GroqClient
-from app.config_models.prompt_config import PromptConfig
-from app.memory.sliding_window_memory import SlidingWindowMemory
+from app.config import GROQ_API_KEY, GROQ_MODEL
+from app.config_models.groq_config import GroqConfig
 from app.config_models.memory_config import MemoryConfig
+from app.config_models.prompt_config import PromptConfig
+from app.config_models.retry_config import RetryConfig
 from app.core.logging_config import configure_logging
 from app.exceptions.client_exceptions import (
     AIClientError,
@@ -10,9 +12,7 @@ from app.exceptions.client_exceptions import (
     ClientConnectionError,
     ClientTimeoutError,
 )
-from app.config import GROQ_API_KEY, GROQ_MODEL
-from app.config_models.groq_config import GroqConfig
-from app.config_models.retry_config import RetryConfig
+from app.memory.sliding_window_memory import SlidingWindowMemory
 from app.prompts.prompt_template import PromptTemplate
 
 

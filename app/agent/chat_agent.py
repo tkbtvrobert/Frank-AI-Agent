@@ -35,7 +35,7 @@ class ChatAgent:
 
     def _build_messages(
         self,
-        message: str,
+        user_message: Message,
     ) -> list[Message]:
         history_messages = self.memory.get_messages()
 
@@ -47,28 +47,28 @@ class ChatAgent:
         return [
             self.system_message,
             *history_messages,
-            Message(
-                role=MessageRole.USER,
-                content=message,
-            ),
+            user_message,
         ]
 
     def chat(
         self,
         message: str,
     ) -> str:
+        if not message.strip():
+            raise ValueError("User message cannot be empty")
+
         logger.info(
             "Processing chat request with message_length=%d",
             len(message),
         )
 
-        messages = self._build_messages(message)
-        response = self.client.chat(messages)
-
         user_message = Message(
             role=MessageRole.USER,
             content=message,
         )
+
+        messages = self._build_messages(message)
+        response = self.client.chat(messages)
 
         assistant_message = Message(
             role=MessageRole.ASSISTANT,

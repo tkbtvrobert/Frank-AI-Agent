@@ -96,9 +96,21 @@ class GroqClient(BaseClient):
             return False
 
         return any(character.isalnum() for character in cleaned_content)
+    
+    def _format_messages(
+        self,
+        messages: list[Message],
+    ) -> list[dict[str, str]]:
+        return [
+            {
+                "role": message.role.value,
+                "content": message.content,
+            }
+            for message in messages
+        ]
 
     def chat(self, messages: list[Message]) -> str:
-        formatted_messages = [message.to_dict() for message in messages]
+        formatted_messages = self._format_messages(messages)
 
         max_attempts = self.retry_config.max_attempts
 
