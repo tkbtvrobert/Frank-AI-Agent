@@ -13,7 +13,6 @@ from app.clients.base_client import BaseClient
 from app.config_models.groq_config import GroqConfig
 from app.config_models.retry_config import RetryConfig
 from app.exceptions.client_exceptions import (
-    AIClientError,
     ClientAuthenticationError,
     ClientConnectionError,
     ClientRateLimitError,
@@ -74,6 +73,23 @@ class GroqClient(BaseClient):
     def _contains_chinese(self, content: str) -> bool:
         """Check whether the response contains Chinese characters."""
         return any("\u4e00" <= character <= "\u9fff" for character in content)
+
+    def _sanitize_response(self, content: str) -> str:
+        cleaned_content = content.strip()
+
+        invalid_prefixes = (
+            ", !",
+            ",!",
+            ", 。",
+            ",。",
+        )
+
+        for prefix in invalid_prefixes:
+            if cleaned_content.startswith(prefix):
+                cleaned_content = cleaned_content[len(prefix) :].lstrip()
+                break
+
+        return cleaned_content
 
     def _is_valid_response(
         self,
@@ -165,19 +181,30 @@ class GroqClient(BaseClient):
                     messages=formatted_messages,
                     model=self.groq_config.model,
                     temperature=self.groq_config.temperature,
-                    max_tokens=self.groq_config.max_tokens,
+                    max_completion_tokens=self.groq_config.max_completion_tokens,
                 )
-
-                content = response.choices[0].message.content
 
                 choice = response.choices[0]
-                content = choice.message.content
+                raw_content = choice.message.content
 
                 logger.debug(
-                    "Groq response finish_reason=%s content=%r",
+                    "Groq response finish_reason=%s raw_content=%r",
                     choice.finish_reason,
-                    content,
+                    raw_content,
                 )
+
+                content = (
+                    self._sanitize_response(raw_content)
+                    if raw_content is not None
+                    else None
+                )
+
+                if raw_content != content:
+                    logger.debug(
+                        "Groq response sanitized from %r to %r",
+                        raw_content,
+                        content,
+                    )
 
                 if not self._is_valid_response(content):
                     self._handle_invalid_response(
@@ -195,7 +222,7 @@ class GroqClient(BaseClient):
                     max_attempts,
                 )
 
-                return content.strip()
+                return content
             except AuthenticationError as error:
                 logger.exception("Groq authentication failed")
 
@@ -234,4 +261,4 @@ class GroqClient(BaseClient):
                     ),
                 )
 
-        raise AIClientError("Groq retry loop ended unexpectedly.")
+        raise RuntimeError("Groq retry loop ended unexpectedly.")
