@@ -16,6 +16,8 @@ from app.exceptions.client_exceptions import (
     ClientConnectionError,
     ClientRateLimitError,
 )
+from app.models.message import Message
+from app.models.message_role import MessageRole
 
 
 def create_groq_client(
@@ -48,12 +50,12 @@ def groq_client() -> GroqClient:
 
 
 @pytest.fixture
-def messages() -> list[dict[str, str]]:
+def messages() -> list[Message]:
     return [
-        {
-            "role": "user",
-            "content": "Hello",
-        }
+        Message(
+            role=MessageRole.USER,
+            content="Hello",
+        )
     ]
 
 
@@ -61,7 +63,7 @@ def messages() -> list[dict[str, str]]:
 def test_chat_retries_connection_error_then_succeeds(
     mock_sleep: MagicMock,
     groq_client: GroqClient,
-    messages: list[dict[str, str]],
+    messages: list[Message],
 ) -> None:
     request = httpx.Request(
         method="POST",
@@ -73,7 +75,8 @@ def test_chat_retries_connection_error_then_succeeds(
     )
 
     successful_response = MagicMock()
-    successful_response.choices[0].message.content = "Hello, Frank!"
+    successful_response.choices[0].message.content = "你好, Frank!"
+    successful_response.choices[0].finish_reason = "stop"
 
     mock_create = MagicMock(
         side_effect=[
@@ -87,7 +90,7 @@ def test_chat_retries_connection_error_then_succeeds(
 
     result = groq_client.chat(messages)
 
-    assert result == "Hello, Frank!"
+    assert result == "你好, Frank!"
     assert mock_create.call_count == 3
 
     assert mock_sleep.call_count == 2
@@ -102,7 +105,7 @@ def test_chat_retries_connection_error_then_succeeds(
 
 def test_chat_raises_connection_error_after_max_attempts(
     groq_client: GroqClient,
-    messages: list[dict[str, str]],
+    messages: list[Message],
 ) -> None:
     request = httpx.Request(
         method="POST",
@@ -127,7 +130,7 @@ def test_chat_raises_connection_error_after_max_attempts(
 
 def test_chat_does_not_retry_authentication_error(
     groq_client: GroqClient,
-    messages: list[dict[str, str]],
+    messages: list[Message],
 ) -> None:
     request = httpx.Request(
         method="POST",
@@ -173,7 +176,7 @@ def test_calculate_delay_uses_exponential_backoff(
 def test_chat_retries_rate_limit_error_then_succeeds(
     mock_sleep: MagicMock,
     groq_client: GroqClient,
-    messages: list[dict[str, str]],
+    messages: list[Message],
 ) -> None:
     request = httpx.Request(
         method="POST",
@@ -192,7 +195,7 @@ def test_chat_retries_rate_limit_error_then_succeeds(
     )
 
     successful_response = MagicMock()
-    successful_response.choices[0].message.content = "Hello, Frank!"
+    successful_response.choices[0].message.content = "你好, Frank!"
 
     mock_create = MagicMock(
         side_effect=[
@@ -206,7 +209,7 @@ def test_chat_retries_rate_limit_error_then_succeeds(
 
     result = groq_client.chat(messages)
 
-    assert result == "Hello, Frank!"
+    assert result == "你好, Frank!"
     assert mock_create.call_count == 3
 
     assert mock_sleep.call_args_list == [
@@ -219,7 +222,7 @@ def test_chat_retries_rate_limit_error_then_succeeds(
 def test_chat_raises_rate_limit_error_after_max_attempts(
     mock_sleep: MagicMock,
     groq_client: GroqClient,
-    messages: list[dict[str, str]],
+    messages: list[Message],
 ) -> None:
     request = httpx.Request(
         method="POST",
