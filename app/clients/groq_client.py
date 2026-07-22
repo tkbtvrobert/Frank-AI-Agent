@@ -1,23 +1,3 @@
-"""
-GroqClient is responsible for:
-
-1. Communicating with the Groq API
-
-2. Sending messages
-
-3. Returning LLM responses
-
-4. Handling API-level exceptions
-
-Not responsible for:
-
-- Managing History
-
-- Managing Prompts
-
-- Managing Workflows
-"""
-
 import logging
 import time
 
@@ -33,9 +13,11 @@ from app.clients.base_client import BaseClient
 from app.config_models.groq_config import GroqConfig
 from app.config_models.retry_config import RetryConfig
 from app.exceptions.client_exceptions import (
+    AIClientError,
     ClientAuthenticationError,
     ClientConnectionError,
     ClientRateLimitError,
+    ClientInvalidResponseError,
     ClientTimeoutError,
 )
 from app.models.message import Message
@@ -45,7 +27,10 @@ logger = logging.getLogger(__name__)
 
 class GroqClient(BaseClient):
     def __init__(self, groq_config: GroqConfig, retry_config: RetryConfig) -> None:
-        self.client = Groq(api_key=groq_config.api_key)
+        self.client = Groq(
+            api_key=groq_config.api_key,
+            max_retries=0,
+        )
         self.groq_config = groq_config
         self.retry_config = retry_config
 
@@ -86,7 +71,14 @@ class GroqClient(BaseClient):
 
         time.sleep(delay_seconds)
 
-    def _is_valid_response(self, content: str | None) -> bool:
+    def _contains_chinese(self, content: str) -> bool:
+        """Check whether the response contains Chinese characters."""
+        return any("\u4e00" <= character <= "\u9fff" for character in content)
+
+    def _is_valid_response(
+        self,
+        content: str | None,
+    ) -> bool:
         if content is None:
             return False
 
@@ -95,12 +87,31 @@ class GroqClient(BaseClient):
         if not cleaned_content:
             return False
 
-        return any(character.isalnum() for character in cleaned_content)
-    
+        if not any(character.isalnum() for character in cleaned_content):
+            return False
+
+        if not self._contains_chinese(cleaned_content):
+            return False
+
+        return True
+
+    def _validate_messages(
+        self,
+        messages: list[Message],
+    ) -> None:
+        for message in messages:
+            if not isinstance(message, Message):
+                raise TypeError(
+                    "All messages must be Message instances, "
+                    f"but received {type(message).__name__}."
+                )
+
     def _format_messages(
         self,
         messages: list[Message],
     ) -> list[dict[str, str]]:
+        self._validate_messages(messages)
+
         return [
             {
                 "role": message.role.value,
@@ -108,6 +119,34 @@ class GroqClient(BaseClient):
             }
             for message in messages
         ]
+
+    def _handle_invalid_response(
+        self,
+        *,
+        content: str | None,
+        attempt: int,
+        max_attempts: int,
+    ) -> None:
+        logger.warning(
+            "Groq returned invalid content on attempt %d/%d: %r",
+            attempt,
+            max_attempts,
+            content,
+        )
+
+        if attempt == max_attempts:
+            raise ClientInvalidResponseError(
+                f"Groq returned invalid content after {max_attempts} attempts."
+            )
+
+        delay_seconds = self._calculate_delay(attempt)
+
+        logger.debug(
+            "Retrying invalid response in %.1f seconds",
+            delay_seconds,
+        )
+
+        time.sleep(delay_seconds)
 
     def chat(self, messages: list[Message]) -> str:
         formatted_messages = self._format_messages(messages)
@@ -125,28 +164,30 @@ class GroqClient(BaseClient):
                 response = self.client.chat.completions.create(
                     messages=formatted_messages,
                     model=self.groq_config.model,
-                    temperature=0,
+                    temperature=self.groq_config.temperature,
+                    max_tokens=self.groq_config.max_tokens,
                 )
 
                 content = response.choices[0].message.content
 
+                choice = response.choices[0]
+                content = choice.message.content
+
+                logger.debug(
+                    "Groq response finish_reason=%s content=%r",
+                    choice.finish_reason,
+                    content,
+                )
+
                 if not self._is_valid_response(content):
-                    logger.warning(
-                        "Groq returned invalid content on attempt %d/%d: %r",
-                        attempt,
-                        max_attempts,
-                        content,
+                    self._handle_invalid_response(
+                        content=content,
+                        attempt=attempt,
+                        max_attempts=max_attempts,
                     )
-
-                    if attempt == max_attempts:
-                        raise RuntimeError(
-                            "Groq returned invalid content "
-                            f"after {max_attempts} attempts"
-                        )
-
-                    delay_seconds = self._calculate_delay(attempt)
-                    time.sleep(delay_seconds)
                     continue
+
+                assert content is not None
 
                 logger.info(
                     "Groq request succeeded on attempt %d/%d",
@@ -154,7 +195,7 @@ class GroqClient(BaseClient):
                     max_attempts,
                 )
 
-                return content
+                return content.strip()
             except AuthenticationError as error:
                 logger.exception("Groq authentication failed")
 
@@ -193,4 +234,4 @@ class GroqClient(BaseClient):
                     ),
                 )
 
-        raise RuntimeError("Retry loop ended unexpectedly")
+        raise AIClientError("Groq retry loop ended unexpectedly.")

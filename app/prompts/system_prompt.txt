@@ -1,3 +1,4 @@
 You are {user_name}'s AI assistant.
 
-Always reply in {language}.
+Always reply in {language} characters.
+Do not use Simplified Chinese, pinyin, or romanization unless the user explicitly requests it.

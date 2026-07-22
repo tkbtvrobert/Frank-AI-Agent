@@ -14,14 +14,17 @@ from app.exceptions.client_exceptions import (
 )
 from app.memory.sliding_window_memory import SlidingWindowMemory
 from app.prompts.prompt_template import PromptTemplate
+from app.memory.in_memory_fact_memory import InMemoryFactMemory
 
 
 def run_demo(agent: ChatAgent) -> None:
+    agent.remember_fact("user_name", "Frank")
+
     messages = [
-        "My name is Frank.",
-        "What is my name?",
         "How are you?",
         "What are you doing?",
+        "Tell me something interesting.",
+        "What is my name?",
     ]
 
     for message in messages:
@@ -33,6 +36,16 @@ def run_demo(agent: ChatAgent) -> None:
 
     agent.memory.clear()
     print(agent.memory.get_messages())
+
+    agent.remember_fact("user_name", "Frank")
+    agent.remember_fact("location", "Hai Phong")
+
+    print(agent.get_fact("user_name"))
+    print(agent.get_fact("location"))
+
+    agent.forget_fact("location")
+
+    print(agent.get_fact("location"))
 
 
 def create_agent() -> ChatAgent:
@@ -68,10 +81,13 @@ def create_agent() -> ChatAgent:
         max_rounds=memory_config.max_history_rounds,
     )
 
+    fact_memory = InMemoryFactMemory()
+
     return ChatAgent(
         prompt_template=prompt_template,
         client=client,
         memory=memory,
+        fact_memory=fact_memory,
     )
 
 
