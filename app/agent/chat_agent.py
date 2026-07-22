@@ -1,11 +1,12 @@
 import logging
 
 from app.clients.base_client import BaseClient
+from app.extractors.base_fact_extractor import BaseFactExtractor
+from app.memory.base_fact_memory import BaseFactMemory
 from app.memory.base_memory import BaseMemory
 from app.models.message import Message
 from app.models.message_role import MessageRole
 from app.prompts.base_prompt_template import BasePromptTemplate
-from app.memory.base_fact_memory import BaseFactMemory
 
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class ChatAgent:
         client: BaseClient,
         memory: BaseMemory,
         fact_memory: BaseFactMemory,
+        fact_extractor: BaseFactExtractor,
     ) -> None:
         logger.info("ChatAgent initialized")
 
@@ -25,6 +27,7 @@ class ChatAgent:
         self.client = client
         self.memory = memory
         self.fact_memory = fact_memory
+        self.fact_extractor = fact_extractor
 
         rendered_prompt = self.prompt_template.render()
 
@@ -36,6 +39,26 @@ class ChatAgent:
             content=rendered_prompt,
         )
 
+    def _remember_extracted_facts(
+        self,
+        facts: dict[str, str],
+    ) -> None:
+        if not facts:
+            logger.debug("No facts extracted from user message")
+            return
+
+        for key, value in facts.items():
+            self.fact_memory.set(
+                key,
+                value,
+            )
+
+            logger.debug(
+                "Remembered extracted fact key=%s value=%r",
+                key,
+                value,
+            )
+
     def _format_facts(
         self,
         facts: dict[str, str],
@@ -43,15 +66,9 @@ class ChatAgent:
         if not facts:
             return None
 
-        formatted_facts = "\n".join(
-            f"- {key}: {value}"
-            for key, value in facts.items()
-        )
+        formatted_facts = "\n".join(f"- {key}: {value}" for key, value in facts.items())
 
-        return (
-            "Known user facts:\n"
-            f"{formatted_facts}"
-        )
+        return f"Known user facts:\n{formatted_facts}"
 
     def _build_messages(
         self,
@@ -64,10 +81,7 @@ class ChatAgent:
         facts_content = self._format_facts(facts)
 
         if facts_content is not None:
-            system_content = (
-                f"{system_content}\n\n"
-                f"{facts_content}"
-            )
+            system_content = f"{system_content}\n\n{facts_content}"
 
         system_message = Message(
             role=MessageRole.SYSTEM,
@@ -120,6 +134,14 @@ class ChatAgent:
         user_message = Message(
             role=MessageRole.USER,
             content=message,
+        )
+
+        facts = self.fact_extractor.extract(
+            user_message.content,
+        )
+
+        self._remember_extracted_facts(
+            facts,
         )
 
         messages = self._build_messages(user_message)

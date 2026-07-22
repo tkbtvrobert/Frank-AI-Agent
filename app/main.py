@@ -15,10 +15,13 @@ from app.exceptions.client_exceptions import (
 from app.memory.sliding_window_memory import SlidingWindowMemory
 from app.prompts.prompt_template import PromptTemplate
 from app.memory.in_memory_fact_memory import InMemoryFactMemory
+from app.extractors.regex_fact_extractor import RegexFactExtractor
 
 
 def run_demo(agent: ChatAgent) -> None:
-    agent.remember_fact("user_name", "Frank")
+    print(agent.chat("My name is Frank."))
+    print(agent.get_fact("user_name"))
+    print(agent.chat("What is my name?"))
 
     messages = [
         "How are you?",
@@ -36,16 +39,6 @@ def run_demo(agent: ChatAgent) -> None:
 
     agent.memory.clear()
     print(agent.memory.get_messages())
-
-    agent.remember_fact("user_name", "Frank")
-    agent.remember_fact("location", "Hai Phong")
-
-    print(agent.get_fact("user_name"))
-    print(agent.get_fact("location"))
-
-    agent.forget_fact("location")
-
-    print(agent.get_fact("location"))
 
 
 def create_agent() -> ChatAgent:
@@ -83,11 +76,14 @@ def create_agent() -> ChatAgent:
 
     fact_memory = InMemoryFactMemory()
 
+    fact_extractor = RegexFactExtractor()
+
     return ChatAgent(
         prompt_template=prompt_template,
         client=client,
         memory=memory,
         fact_memory=fact_memory,
+        fact_extractor=fact_extractor,
     )
 
 
