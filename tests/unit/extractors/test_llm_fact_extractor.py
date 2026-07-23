@@ -7,12 +7,16 @@ from app.models.message_role import MessageRole
 from tests.fakes.fake_client import FakeClient
 
 
-def test_build_messages_contains_system_and_user_messages() -> None:
-    client = FakeClient()
-    extractor = LLMFactExtractor(
-        client=client,
+@pytest.fixture
+def extractor() -> LLMFactExtractor:
+    return LLMFactExtractor(
+        client=FakeClient(),
     )
 
+
+def test_build_messages_contains_system_and_user_messages(
+    extractor: LLMFactExtractor,
+) -> None:
     messages = extractor._build_messages(
         "My name is Frank.",
     )
@@ -45,13 +49,12 @@ def test_extract_calls_client_and_returns_parsed_facts() -> None:
     assert len(client.received_messages) == 2
     assert client.received_messages[0].role == MessageRole.SYSTEM
     assert client.received_messages[1].role == MessageRole.USER
+    assert client.received_messages[1].content == "My name is Frank."
 
 
-def test_parse_response_returns_facts() -> None:
-    extractor = LLMFactExtractor(
-        client=FakeClient(),
-    )
-
+def test_parse_response_returns_facts(
+    extractor: LLMFactExtractor,
+) -> None:
     result = extractor._parse_response(
         '{"user_name": "Frank", "location": "Hai Phong"}',
     )
@@ -62,11 +65,9 @@ def test_parse_response_returns_facts() -> None:
     }
 
 
-def test_parse_response_returns_empty_dict() -> None:
-    extractor = LLMFactExtractor(
-        client=FakeClient(),
-    )
-
+def test_parse_response_returns_empty_dict(
+    extractor: LLMFactExtractor,
+) -> None:
     result = extractor._parse_response(
         "{}",
     )
@@ -74,22 +75,18 @@ def test_parse_response_returns_empty_dict() -> None:
     assert result == {}
 
 
-def test_parse_response_raises_for_invalid_json() -> None:
-    extractor = LLMFactExtractor(
-        client=FakeClient(),
-    )
-
+def test_parse_response_raises_for_invalid_json(
+    extractor: LLMFactExtractor,
+) -> None:
     with pytest.raises(json.JSONDecodeError):
         extractor._parse_response(
             "not json",
         )
 
 
-def test_parse_response_raises_for_json_array() -> None:
-    extractor = LLMFactExtractor(
-        client=FakeClient(),
-    )
-
+def test_parse_response_raises_for_json_array(
+    extractor: LLMFactExtractor,
+) -> None:
     with pytest.raises(
         ValueError,
         match="must be a JSON object",
@@ -99,11 +96,9 @@ def test_parse_response_raises_for_json_array() -> None:
         )
 
 
-def test_parse_response_raises_for_non_string_value() -> None:
-    extractor = LLMFactExtractor(
-        client=FakeClient(),
-    )
-
+def test_parse_response_raises_for_non_string_value(
+    extractor: LLMFactExtractor,
+) -> None:
     with pytest.raises(
         ValueError,
         match="Fact values must be strings",
@@ -111,3 +106,61 @@ def test_parse_response_raises_for_non_string_value() -> None:
         extractor._parse_response(
             '{"age": 32}',
         )
+
+
+def test_clean_response_removes_json_code_block(
+    extractor: LLMFactExtractor,
+) -> None:
+    result = extractor._clean_response(
+        "```json\n{}\n```",
+    )
+
+    assert result == "{}"
+
+
+def test_clean_response_removes_plain_code_block(
+    extractor: LLMFactExtractor,
+) -> None:
+    result = extractor._clean_response(
+        "```\n{}\n```",
+    )
+
+    assert result == "{}"
+
+
+def test_clean_response_strips_whitespace(
+    extractor: LLMFactExtractor,
+) -> None:
+    result = extractor._clean_response(
+        "\n  {}  \n",
+    )
+
+    assert result == "{}"
+
+
+def test_clean_response_keeps_clean_json(
+    extractor: LLMFactExtractor,
+) -> None:
+    result = extractor._clean_response(
+        "{}",
+    )
+
+    assert result == "{}"
+
+
+def test_extract_cleans_markdown_and_returns_parsed_facts() -> None:
+    client = FakeClient(
+        response=('```json\n{"user_name": "Frank"}\n```'),
+    )
+
+    extractor = LLMFactExtractor(
+        client=client,
+    )
+
+    result = extractor.extract(
+        "My name is Frank.",
+    )
+
+    assert result == {
+        "user_name": "Frank",
+    }

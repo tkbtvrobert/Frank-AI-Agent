@@ -63,6 +63,20 @@ Output:
             ),
         ]
 
+    def _clean_response(
+        self,
+        response: str,
+    ) -> str:
+        response = response.strip()
+
+        response = response.removeprefix("```json")
+
+        response = response.removeprefix("```")
+
+        response = response.removesuffix("```")
+
+        return response.strip()
+
     def _parse_response(
         self,
         response: str,
@@ -90,6 +104,8 @@ Output:
         )
 
         response = self.client.chat(messages)
+
+        response = self._clean_response(response)
 
         return self._parse_response(
             response,
