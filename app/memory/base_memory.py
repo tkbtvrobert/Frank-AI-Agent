@@ -5,12 +5,12 @@ from app.models.message import Message
 class BaseMemory(ABC):
     @abstractmethod
     def add_turn(self, user_message: Message, assistant_message: Message) -> None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_messages(self) -> list[Message]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def clear(self) -> None:
-        pass
+        raise NotImplementedError
