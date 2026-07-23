@@ -1,3 +1,5 @@
+import json
+
 from app.clients.base_client import BaseClient
 from app.extractors.base_fact_extractor import BaseFactExtractor
 from app.models.message import Message
@@ -61,6 +63,24 @@ Output:
             ),
         ]
 
+    def _parse_response(
+        self,
+        response: str,
+    ) -> dict[str, str]:
+        parsed = json.loads(response)
+
+        if not isinstance(parsed, dict):
+            raise ValueError("Fact extraction response must be a JSON object.")
+
+        for key, value in parsed.items():
+            if not isinstance(key, str):
+                raise ValueError("Fact keys must be strings.")
+
+            if not isinstance(value, str):
+                raise ValueError("Fact values must be strings.")
+
+        return parsed
+
     def extract(
         self,
         user_message: str,
@@ -69,10 +89,8 @@ Output:
             user_message,
         )
 
-        response = self.client.chat(
-            messages
-        )
+        response = self.client.chat(messages)
 
-        raise NotImplementedError(
-            f"Response parsing is not implemented yet: {response}"
+        return self._parse_response(
+            response,
         )
