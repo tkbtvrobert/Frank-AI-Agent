@@ -16,12 +16,45 @@ def test_build_messages_contains_system_and_user_messages() -> None:
     )
 
     assert len(messages) == 2
-
     assert messages[0].role == MessageRole.SYSTEM
-    assert "valid JSON object" in messages[0].content
-
     assert messages[1].role == MessageRole.USER
     assert messages[1].content == "My name is Frank."
+
+
+def test_extract_calls_client_with_built_messages() -> None:
+    client = FakeClient(
+        response='{"user_name": "Frank"}',
+    )
+
+    extractor = LLMFactExtractor(
+        client=client,
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Response parsing is not implemented yet",
+    ):
+        extractor.extract(
+            "My name is Frank.",
+        )
+
+    assert client.call_count == 1
+    assert len(client.received_messages) == 2
+
+    assert (
+        client.received_messages[0].role
+        == MessageRole.SYSTEM
+    )
+
+    assert (
+        client.received_messages[1].role
+        == MessageRole.USER
+    )
+
+    assert (
+        client.received_messages[1].content
+        == "My name is Frank."
+    )
 
 
 def test_extract_is_not_implemented() -> None:

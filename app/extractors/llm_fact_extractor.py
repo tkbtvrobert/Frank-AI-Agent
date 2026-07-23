@@ -65,4 +65,14 @@ Output:
         self,
         user_message: str,
     ) -> dict[str, str]:
-        raise NotImplementedError
+        messages = self._build_messages(
+            user_message,
+        )
+
+        response = self.client.chat(
+            messages
+        )
+
+        raise NotImplementedError(
+            f"Response parsing is not implemented yet: {response}"
+        )
