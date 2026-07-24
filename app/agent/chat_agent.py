@@ -7,6 +7,7 @@ from app.memory.base_memory import BaseMemory
 from app.models.message import Message
 from app.models.message_role import MessageRole
 from app.prompts.base_prompt_template import BasePromptTemplate
+from app.policies.base_memory_policy import BaseMemoryPolicy
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ class ChatAgent:
         memory: BaseMemory,
         fact_memory: BaseFactMemory,
         fact_extractor: BaseFactExtractor,
+        memory_policy: BaseMemoryPolicy,
     ) -> None:
         logger.info("ChatAgent initialized")
 
@@ -28,6 +30,7 @@ class ChatAgent:
         self.memory = memory
         self.fact_memory = fact_memory
         self.fact_extractor = fact_extractor
+        self.memory_policy = memory_policy
 
         rendered_prompt = self.prompt_template.render()
 
@@ -48,6 +51,14 @@ class ChatAgent:
             return
 
         for key, value in facts.items():
+            if not self.memory_policy.should_remember(key, value):
+                logger.debug(
+                    "Rejected extracted fact key=%s value=%r",
+                    key,
+                    value,
+                )
+                continue
+
             self.fact_memory.set(
                 key,
                 value,

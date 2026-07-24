@@ -16,6 +16,7 @@ from app.memory.sliding_window_memory import SlidingWindowMemory
 from app.prompts.prompt_template import PromptTemplate
 from app.memory.in_memory_fact_memory import InMemoryFactMemory
 from app.extractors.regex_fact_extractor import RegexFactExtractor
+from app.policies.simple_memory_policy import SimpleMemoryPolicy
 
 
 def run_demo(agent: ChatAgent) -> None:
@@ -78,12 +79,15 @@ def create_agent() -> ChatAgent:
 
     fact_extractor = RegexFactExtractor()
 
+    memory_policy = SimpleMemoryPolicy()
+
     return ChatAgent(
         prompt_template=prompt_template,
         client=client,
         memory=memory,
         fact_memory=fact_memory,
         fact_extractor=fact_extractor,
+        memory_policy=memory_policy,
     )
 
 
